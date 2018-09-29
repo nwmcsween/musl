@@ -1,22 +1,22 @@
 #include <string.h>
 #include <stdint.h>
-#include <limits.h>
 
-#define ALIGN (sizeof(size_t))
-#define ONES ((size_t)-1/UCHAR_MAX)
-#define HIGHS (ONES * (UCHAR_MAX/2+1))
-#define HASZERO(x) ((x)-ONES & ~(x) & HIGHS)
+#define has_zero(x) ((x) - (0 ? (x) : -1) / 0xff & ~(x) & (0 ? (x) : -1) / 0xff * 0x80)
 
 size_t strlen(const char *s)
 {
-	const char *a = s;
+	const char *const s0 = s;
 #ifdef __GNUC__
 	typedef size_t __attribute__((__may_alias__)) word;
-	const word *w;
-	for (; (uintptr_t)s % ALIGN; s++) if (!*s) return s-a;
-	for (w = (const void *)s; !HASZERO(*w); w++);
-	s = (const void *)w;
+	const word *ws;
+
+	for (; (uintptr_t)s & sizeof(word) - 1 && *s; s++);
+
+	ws = (const void *)s;
+	for (; !has_zero(*ws); ws++);
+	s = (const void *)ws;
 #endif
 	for (; *s; s++);
-	return s-a;
+
+	return s - s0;
 }

@@ -1,11 +1,7 @@
 #include <string.h>
 #include <stdint.h>
-#include <limits.h>
 
-#define ALIGN (sizeof(size_t))
-#define ONES ((size_t)-1/UCHAR_MAX)
-#define HIGHS (ONES * (UCHAR_MAX/2+1))
-#define HASZERO(x) ((x)-ONES & ~(x) & HIGHS)
+#define has_zero(x) ((x) - (0 ? (x) : -1) / 0xff & ~(x) & (0 ? (x) : -1) / 0xff * 0x80)
 
 char *__stpcpy(char *restrict d, const char *restrict s)
 {
@@ -13,15 +9,18 @@ char *__stpcpy(char *restrict d, const char *restrict s)
 	typedef size_t __attribute__((__may_alias__)) word;
 	word *wd;
 	const word *ws;
-	if ((uintptr_t)s % ALIGN == (uintptr_t)d % ALIGN) {
-		for (; (uintptr_t)s % ALIGN; s++, d++)
-			if (!(*d=*s)) return d;
-		wd=(void *)d; ws=(const void *)s;
-		for (; !HASZERO(*ws); *wd++ = *ws++);
-		d=(void *)wd; s=(const void *)ws;
-	}
+
+	if ((uintptr_t)d % sizeof(word) != (uintptr_t)s % sizeof(word)) goto bytewise;
+
+	for (; (uintptr_t)s % sizeof(word) && (*d = *s); d++, s++);
+
+	wd = (void *)d; ws = (const void *)s;
+	for (; !has_zero(*ws); wd++, ws++) *wd = *ws;
+	d = (void *)wd; s = (const void *)ws;
+
+bytewise:
 #endif
-	for (; (*d=*s); s++, d++);
+	for (; *d = *s; d++, s++);
 
 	return d;
 }

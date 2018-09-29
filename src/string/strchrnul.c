@@ -1,27 +1,26 @@
 #include <string.h>
 #include <stdint.h>
-#include <limits.h>
 
-#define ALIGN (sizeof(size_t))
-#define ONES ((size_t)-1/UCHAR_MAX)
-#define HIGHS (ONES * (UCHAR_MAX/2+1))
-#define HASZERO(x) ((x)-ONES & ~(x) & HIGHS)
+#define has_zero(x) ((x) - (0 ? (x) : -1) / 0xff & ~(x) & (0 ? (x) : -1) / 0xff * 0x80)
 
 char *__strchrnul(const char *s, int c)
 {
 	c = (unsigned char)c;
-	if (!c) return (char *)s + strlen(s);
+
+	if (!c) return (char *)s + strlen((char *)s);
 
 #ifdef __GNUC__
 	typedef size_t __attribute__((__may_alias__)) word;
-	const word *w;
-	for (; (uintptr_t)s % ALIGN; s++)
-		if (!*s || *(unsigned char *)s == c) return (char *)s;
-	size_t k = ONES * c;
-	for (w = (void *)s; !HASZERO(*w) && !HASZERO(*w^k); w++);
-	s = (void *)w;
+	const word *ws,  wc = (word)-1 / 0xff * c;
+
+	for (; (uintptr_t)s % sizeof(word) && *s && *s != c; s++);
+
+	ws = (const void *)s;
+	for (; !has_zero(*ws) && !has_zero(*ws ^ wc); ws++);
+	s = (const void *)ws;
 #endif
-	for (; *s && *(unsigned char *)s != c; s++);
+	for (; *s && *s != c; s++);
+
 	return (char *)s;
 }
 

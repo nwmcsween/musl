@@ -1,34 +1,32 @@
 #include <string.h>
 #include <stdint.h>
-#include <limits.h>
 
-#define ALIGN (sizeof(size_t)-1)
-#define ONES ((size_t)-1/UCHAR_MAX)
-#define HIGHS (ONES * (UCHAR_MAX/2+1))
-#define HASZERO(x) ((x)-ONES & ~(x) & HIGHS)
+#define has_zero(x) ((x) - (0 ? (x) : -1) / 0xff & ~(x) & (0 ? (x) : -1) / 0xff * 0x80)
 
-void *memccpy(void *restrict dest, const void *restrict src, int c, size_t n)
+void *memccpy(void *restrict _d, const void *restrict _s, int c, size_t n)
 {
-	unsigned char *d = dest;
-	const unsigned char *s = src;
-
 	c = (unsigned char)c;
+	unsigned char *d = _d;
+	const unsigned char *s = _s;
 #ifdef __GNUC__
 	typedef size_t __attribute__((__may_alias__)) word;
 	word *wd;
-	const word *ws;
-	if (((uintptr_t)s & ALIGN) == ((uintptr_t)d & ALIGN)) {
-		for (; ((uintptr_t)s & ALIGN) && n && (*d=*s)!=c; n--, s++, d++);
-		if ((uintptr_t)s & ALIGN) goto tail;
-		size_t k = ONES * c;
-		wd=(void *)d; ws=(const void *)s;
-		for (; n>=sizeof(size_t) && !HASZERO(*ws^k);
-		       n-=sizeof(size_t), ws++, wd++) *wd = *ws;
-		d=(void *)wd; s=(const void *)ws;
-	}
+	const word *ws, wi = (word)-1 / 0xff * c;
+
+        if ((uintptr_t)d % sizeof(word) != (uintptr_t)s % sizeof(word)
+	    || n < sizeof(word) * 2) goto bytewise;
+
+	for (; (uintptr_t)s % sizeof(word) && *s != c
+	     ; d++, s++, n--) *d = *s;
+
+	wd = (void *)d; ws = (const void *)s;
+	for (;  n >= sizeof(word) && !has_zero(*ws ^ wi)
+	     ; *wd++ = *ws++, n -= sizeof(word));
+	d = (void *)wd; s = (const void *)ws;
+
+bytewise:
 #endif
-	for (; n && (*d=*s)!=c; n--, s++, d++);
-tail:
-	if (*s==c) return d+1;
-	return 0;
+	for (; n && *d != c; *d++ = *s++, n--);
+
+	return n ? d + 1 : 0;
 }
